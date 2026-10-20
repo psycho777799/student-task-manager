@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Task Manager</title>
+
+  <!-- Apply the saved theme BEFORE the page is drawn, so it does not flash white on refresh -->
+  <script>
+    (function () {
+      var theme = null;
+      try { theme = localStorage.getItem("theme"); } catch (e) {}
+      if (theme !== "dark" && theme !== "light") {
+        theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+
+  <!-- ================= CSS: how the page looks ================= -->
+  <style>
+    /* Light theme colors (default) */
+    :root {
+      --bg: #f3f4f8;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #4f46e5;
+      --primary-dark: #4338ca;
+      --green: #16a34a;
+      --orange: #ea580c;
+      --red: #dc2626;
+      --red-soft: #fee2e2;
+      --border: #e5e7eb;
+      --shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    /* Dark theme: only the colors change, the layout stays the same */
+    [data-theme="dark"] {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --primary: #818cf8;
+      --primary-dark: #6366f1;
+      --green: #4ade80;
+      --orange: #fb923c;
+      --red: #f87171;
+      --red-soft: #3b1d1d;
+      --border: #334155;
+      --shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px 16px;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .container { max-width: 680px; margin: 0 auto; }
+
+    /* ----- Header ----- */
+    .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    h1 { font-size: 1.8rem; }
+    .subtitle { color: var(--muted); margin: 6px 0 24px; }
+
+    .theme-btn {
+      background: var(--card);
+      color: var(--text);
+      border: 2px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      white-space: nowrap;
+    }
+    .theme-btn:hover { border-color: var(--primary); }
+
+    /* ----- Counters ----- */
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+    .stat {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 16px;
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+    .stat .number { font-size: 1.9rem; font-weight: 700; }
+    .stat .label { color: var(--muted); font-size: 0.85rem; }
+    #totalCount { color: var(--primary); }
+    #pendingCount { color: var(--orange); }
+    #completedCount { color: var(--green); }
+
+    /* ----- Inputs (shared look) ----- */
+    input[type="text"], input[type="date"], input[type="search"] {
+      padding: 13px 14px;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      font-size: 1rem;
+      font-family: inherit;
+      background: var(--card);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: var(--primary); }
+    [data-theme="dark"] input[type="date"] { color-scheme: dark; }
+
+    /* ----- Add task form ----- */
+    .add-form { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .add-form #taskInput { flex: 1 1 220px; }
+    .add-form button {
+      padding: 0 24px;
+      min-height: 48px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .add-form button:hover { background: var(--primary-dark); }
+
+    .error { color: var(--red); font-size: 0.9rem; min-height: 1.2em; margin-bottom: 8px; }
+
+    /* ----- Search ----- */
+    .search { width: 100%; margin-bottom: 16px; }
+
+    /* ----- Task list ----- */
+    ul { list-style: none; }
+    .task {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--card);
+      padding: 14px 16px;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      box-shadow: var(--shadow);
+    }
+    .task input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; accent-color: var(--green); flex-shrink: 0; }
+    .task .info { flex: 1; min-width: 0; }
+    .task .text { word-break: break-word; }
+    .task .due { font-size: 0.82rem; color: var(--muted); margin-top: 3px; }
+
+    /* Completed task: line through the text */
+    .task.done .text { text-decoration: line-through; color: var(--muted); }
+
+    /* Overdue (deadline passed, not completed) */
+    .task.overdue .due { color: var(--red); font-weight: 600; }
+
+    .task .delete {
+      background: none;
+      border: none;
+      color: var(--red);
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 4px 10px;
+      border-radius: 8px;
+    }
+    .task .delete:hover { background: var(--red-soft); }
+
+    .empty { text-align: center; color: var(--muted); padding: 30px 0; }
+
+    @media (max-width: 480px) {
+      h1 { font-size: 1.4rem; }
+      .stat .number { font-size: 1.5rem; }
+      .add-form button { width: 100%; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ================= HTML: the structure of the page ================= -->
+  <div class="container">
+
+    <div class="header">
+      <h1>📚 Student Task Manager</h1>
+      <button class="theme-btn" id="themeBtn" type="button">🌙 Dark</button>
+    </div>
+    <p class="subtitle">Plan your study. Finish your tasks.</p>
+
+    <!-- Counters -->
+    <div class="stats">
+      <div class="stat"><div class="number" id="totalCount">0</div><div class="label">Total</div></div>
+      <div class="stat"><div class="number" id="pendingCount">0</div><div class="label">Pending</div></div>
+      <div class="stat"><div class="number" id="completedCount">0</div><div class="label">Completed</div></div>
+    </div>
+
+    <!-- Form to add a task: name + deadline + Add button -->
+    <form class="add-form" id="taskForm">
+      <input type="text" id="taskInput" placeholder="e.g. Finish maths homework" maxlength="100" autocomplete="off" />
+      <input type="date" id="dateInput" title="Deadline (optional)" />
+      <button type="submit">Add</button>
+    </form>
+    <div class="error" id="errorMsg"></div>
+
+    <!-- Search box -->
+    <input type="search" class="search" id="searchInput" placeholder="🔍 Search tasks by name..." autocomplete="off" />
+
+    <!-- The task list is drawn here by JavaScript -->
+    <ul id="taskList"></ul>
+  </div>
+
+  <!-- ================= JavaScript: how the page behaves ================= -->
+  <script>
+    // ---------- 1. Find the HTML elements we need ----------
+    const form = document.getElementById("taskForm");
+    const taskInput = document.getElementById("taskInput");
+    const dateInput = document.getElementById("dateInput");
+    const searchInput = document.getElementById("searchInput");
+    const errorMsg = document.getElementById("errorMsg");
+    const list = document.getElementById("taskList");
+    const themeBtn = document.getElementById("themeBtn");
+    const totalEl = document.getElementById("totalCount");
+    const pendingEl = document.getElementById("pendingCount");
+    const completedEl = document.getElementById("completedCount");
+
+    // ---------- 2. Safe storage helpers ----------
+    // try/catch means: if storage fails or holds broken data, the page
+    // still works instead of crashing (a crash is what makes "Add" seem dead).
+    function loadTasks() {
+      try {
+        const data = JSON.parse(localStorage.getItem("tasks"));
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function saveTasks() {
+      try {
+        localStorage.setItem("tasks", JSON.stringify(tasks));
+      } catch (error) {
+        console.warn("Could not save tasks:", error);
+      }
+    }
+
+    // ---------- 3. App data ----------
+    let tasks = loadTasks();   // saved tasks, or an empty list
+    let searchText = "";       // what the user typed in the search box
+
+    // ---------- 4. Date helpers ----------
+    // Today as "YYYY-MM-DD" (the same format the date input uses)
+    function todayString() {
+      const d = new Date();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return d.getFullYear() + "-" + month + "-" + day;
+    }
+
+    // Turn "2026-10-25" into "25 Oct 2026"
+    function formatDate(dateString) {
+      const parts = dateString.split("-");
+      const date = new Date(parts[0], parts[1] - 1, parts[2]);
+      return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    }
+
+    // ---------- 5. Draw the page ----------
+    function render() {
+      list.innerHTML = "";
+
+      // Keep only tasks whose name contains the search text
+      const visibleTasks = tasks.filter(function (task) {
+        return task.text.toLowerCase().includes(searchText.toLowerCase());
+      });
+
+      if (tasks.length === 0) {
+        list.innerHTML = '<li class="empty">No tasks yet. Add your first one above! 🎉</li>';
+      } else if (visibleTasks.length === 0) {
+        list.innerHTML = '<li class="empty">No tasks match your search.</li>';
+      }
+
+      const today = todayString();
+
+      visibleTasks.forEach(function (task) {
+        const isOverdue = task.dueDate && !task.completed && task.dueDate < today;
+
+        const li = document.createElement("li");
+        li.className = "task" + (task.completed ? " done" : "") + (isOverdue ? " overdue" : "");
+
+        // Checkbox: mark complete / pending
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = task.completed;
+        checkbox.addEventListener("change", function () { toggleTask(task.id); });
+
+        // Task name and deadline
+        const info = document.createElement("div");
+        info.className = "info";
+
+        const text = document.createElement("div");
+        text.className = "text";
+        text.textContent = task.text;   // textContent is safe (never runs HTML)
+        info.appendChild(text);
+
+        if (task.dueDate) {
+          const due = document.createElement("div");
+          due.className = "due";
+          due.textContent = (isOverdue ? "⚠️ Overdue · " : "📅 Due ") + formatDate(task.dueDate);
+          info.appendChild(due);
+        }
+
+        // Delete button
+        const del = document.createElement("button");
+        del.className = "delete";
+        del.type = "button";
+        del.textContent = "✕";
+        del.title = "Delete task";
+        del.addEventListener("click", function () { deleteTask(task.id); });
+
+        li.append(checkbox, info, del);
+        list.appendChild(li);
+      });
+
+      updateCounts();
+    }
+
+    // Counts always use ALL tasks, even while searching
+    function updateCounts() {
+      const completed = tasks.filter(function (t) { return t.completed; }).length;
+      totalEl.textContent = tasks.length;
+      completedEl.textContent = completed;
+      pendingEl.textContent = tasks.length - completed;
+    }
+
+    // ---------- 6. Actions ----------
+    function addTask(text, dueDate) {
+      tasks.push({
+        id: Date.now(),          // unique id from the current time
+        text: text,
+        dueDate: dueDate || "",  // empty string means "no deadline"
+        completed: false
+      });
+      saveTasks();
+      render();
+    }
+
+    function toggleTask(id) {
+      tasks = tasks.map(function (t) {
+        return t.id === id ? { ...t, completed: !t.completed } : t;
+      });
+      saveTasks();
+      render();
+    }
+
+    function deleteTask(id) {
+      tasks = tasks.filter(function (t) { return t.id !== id; });
+      saveTasks();
+      render();
+    }
+
+    // ---------- 7. Dark mode ----------
+    function updateThemeButton() {
+      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+      themeBtn.textContent = isDark ? "☀️ Light" : "🌙 Dark";
+    }
+
+    themeBtn.addEventListener("click", function () {
+      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+      const newTheme = isDark ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", newTheme);
+      try { localStorage.setItem("theme", newTheme); } catch (error) {}
+      updateThemeButton();
+    });
+
+    // ---------- 8. Events ----------
+    // Add a task (Add button or Enter key)
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();                 // stop the page from reloading
+      const text = taskInput.value.trim();    // remove extra spaces
+
+      if (text === "") {
+        errorMsg.textContent = "Please type a task name first.";
+        taskInput.focus();
+        return;
+      }
+
+      errorMsg.textContent = "";
+      addTask(text, dateInput.value);
+
+      // If a search is active, clear it so the new task is visible
+      searchText = "";
+      searchInput.value = "";
+      render();
+
+      taskInput.value = "";
+      dateInput.value = "";
+      taskInput.focus();
+    });
+
+    // Search while typing
+    searchInput.addEventListener("input", function () {
+      searchText = searchInput.value.trim();
+      render();
+    });
+
+    // ---------- 9. Start the app ----------
+    updateThemeButton();
+    render();
+  </script>
+</body>
+</html>
